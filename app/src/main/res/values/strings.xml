@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Mapboxsample</string>
+
+    <string name="toolbar_title">Search demo</string>
+    <string name="query_hint">Where to?</string>
+    <string name="mapbox_access_token" translatable="false">YOUR_PUBLIC_KEY</string>
+
+</resources>
