@@ -11,6 +11,11 @@ activity = "1.9.0"
 constraintlayout = "2.1.4"
 mapboxMap = "11.0.0"
 mapboxSearchUi = "2.2.0-rc.1"
+mapboxNavigation = "3.2.0-rc.1"
+retrofit = "2.9.0"
+hiltAndroid = "2.51"
+kotlinKsp = "1.9.0-1.0.12"
+mapboxGeojson = "7.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -23,8 +28,17 @@ androidx-activity = { group = "androidx.activity", name = "activity", version.re
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 mapbox-map = { group = "com.mapbox.maps", name = "android", version.ref = "mapboxMap" }
 mapbox-search-ui = { group = "com.mapbox.search", name = "mapbox-search-android-ui", version.ref = "mapboxSearchUi" }
+mapbox-navigation = { group = "com.mapbox.navigationcore", name = "navigation", version.ref = "mapboxNavigation" }
+mapbox-geojson = { group = "com.mapbox.mapboxsdk", name = "mapbox-sdk-geojson", version.ref = "mapboxGeojson" }
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+
+dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = "hiltAndroid" }
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hiltAndroid" }
+hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hiltAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+jetbrainsKotlinKsp = { id = "com.google.devtools.ksp", version.ref = "kotlinKsp" }
+hiltPlugin = { id = "com.google.dagger.hilt.android", version.ref = "hiltAndroid" }
 

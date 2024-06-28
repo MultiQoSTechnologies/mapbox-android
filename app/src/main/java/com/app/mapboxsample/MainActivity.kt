@@ -1,7 +1,10 @@
 package com.app.mapboxsample
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Color
+import android.location.Location
 import android.os.Bundle
 import android.util.Log
 import android.view.Menu
@@ -16,12 +19,20 @@ import androidx.core.app.ActivityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.mapbox.common.location.LocationProvider
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
+import com.mapbox.geojson.LineString
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
+import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.generated.LineLayer
+import com.mapbox.maps.extension.style.sources.addSource
+import com.mapbox.maps.extension.style.sources.generated.GeoJsonSource
 import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
@@ -43,6 +54,8 @@ import com.mapbox.search.ui.view.DistanceUnitType
 import com.mapbox.search.ui.view.SearchResultsView
 import com.mapbox.search.ui.view.place.SearchPlace
 import com.mapbox.search.ui.view.place.SearchPlaceBottomSheetView
+import kotlinx.coroutines.launch
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -57,6 +70,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var mapView: MapView
     private lateinit var mapMarkersManager: MapMarkersManager
+    private var sourceLocation: Location? = null
+    val sourceMarkerColor = "0000FF"
+    val destinationMarkerColor = "ee4e8b"
 
     private val onBackPressedCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -108,6 +124,8 @@ class MainActivity : AppCompatActivity() {
             updateOnBackPressedCallbackEnabled()
         }
 
+        val quotesApi = RetrofitHelper.getInstance().create(MapboxApi::class.java)
+
         toolbar = findViewById(R.id.toolbar)
         toolbar.apply {
             title = getString(R.string.toolbar_title)
@@ -153,14 +171,14 @@ class MainActivity : AppCompatActivity() {
                 responseInfo: ResponseInfo
             ) {
                 closeSearchView()
-                mapMarkersManager.showMarkers(results.map { it.coordinate })
+                mapMarkersManager.showMarkers(results.map { it.coordinate }, destinationMarkerColor)
             }
 
             override fun onOfflineSearchResultsShown(
                 results: List<OfflineSearchResult>, responseInfo: OfflineResponseInfo
             ) {
                 closeSearchView()
-                mapMarkersManager.showMarkers(results.map { it.coordinate })
+                mapMarkersManager.showMarkers(results.map { it.coordinate }, destinationMarkerColor)
             }
 
             override fun onSuggestionSelected(searchSuggestion: SearchSuggestion): Boolean {
@@ -172,7 +190,10 @@ class MainActivity : AppCompatActivity() {
             ) {
                 closeSearchView()
                 searchPlaceView.open(SearchPlace.createFromSearchResult(searchResult, responseInfo))
-                mapMarkersManager.showMarker(searchResult.coordinate)
+                val point = sourceLocation?.let {
+                    Point.fromLngLat(it.longitude, it.latitude)
+                }
+                mapMarkersManager.showMarker(searchResult.coordinate, destinationMarkerColor, point)
             }
 
             override fun onOfflineSearchResultSelected(
@@ -180,7 +201,10 @@ class MainActivity : AppCompatActivity() {
             ) {
                 closeSearchView()
                 searchPlaceView.open(SearchPlace.createFromOfflineSearchResult(searchResult))
-                mapMarkersManager.showMarker(searchResult.coordinate)
+                val point = sourceLocation?.let {
+                    Point.fromLngLat(it.longitude, it.latitude)
+                }
+                mapMarkersManager.showMarker(searchResult.coordinate, destinationMarkerColor, point)
             }
 
             override fun onError(e: Exception) {
@@ -203,7 +227,14 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                mapMarkersManager.showMarker(historyRecord.coordinate)
+                val point = sourceLocation?.let {
+                    Point.fromLngLat(it.longitude, it.latitude)
+                }
+                mapMarkersManager.showMarker(
+                    historyRecord.coordinate,
+                    destinationMarkerColor,
+                    point
+                )
             }
 
             override fun onPopulateQueryClick(
@@ -228,7 +259,57 @@ class MainActivity : AppCompatActivity() {
         }
 
         searchPlaceView.addOnNavigateClickListener { searchPlace ->
-            startActivity(geoIntent(searchPlace.coordinate))
+
+            lifecycleScope.launch {
+
+                sourceLocation?.let { currentLocation ->
+                    val result = quotesApi.getCoordinates(
+                        "${currentLocation.longitude},${currentLocation.latitude};${searchPlace.coordinate.longitude()},${searchPlace.coordinate.latitude()}",
+                        "geojson",
+                        getString(R.string.mapbox_access_token)
+                    )
+                    val coordinates = result.body()?.routes?.get(0)?.geometry?.coordinates
+                    Log.e("coordinates: ", "$coordinates")
+
+                    coordinates?.let { coor ->
+                        mapView.mapboxMap.loadStyle(
+                            Style.MAPBOX_STREETS
+                        ) { style ->
+
+                            val points: MutableList<Point> = ArrayList()
+                            for (coordinate in coor) {
+                                if (coordinate != null && coordinate.size == 2) {
+                                    points.add(Point.fromLngLat(coordinate[0], coordinate[1]))
+                                }
+                            }
+
+                            val geoJsonSource = GeoJsonSource.Builder(
+                                "line-source",
+                            )
+                                .featureCollection(
+                                    FeatureCollection.fromFeatures(
+                                        arrayOf<Feature>(
+                                            Feature.fromGeometry(
+                                                LineString.fromLngLats(points)
+                                            )
+                                        )
+                                    )
+                                )
+                                .build()
+
+                            style.addSource(geoJsonSource)
+                            style.addLayer(
+                                LineLayer("linelayer", "line-source").lineWidth(3.0)
+                                    .lineColor(Color.parseColor("#FF0000"))
+                            )
+                        }
+                    }
+                }
+
+            }
+
+//            startActivity(geoIntent(searchPlace.coordinate))
+
         }
 
         searchPlaceView.addOnShareClickListener { searchPlace ->
@@ -250,9 +331,12 @@ class MainActivity : AppCompatActivity() {
                     Manifest.permission.ACCESS_COARSE_LOCATION
                 ), PERMISSIONS_REQUEST_LOCATION
             )
-        }else {
+        } else {
+            startLocationUpdate()
             locationProvider.lastKnownLocation(this) { point ->
-                mapMarkersManager.showMarker(point!!)
+                point?.let { pt ->
+                    mapMarkersManager.showMarker(pt, sourceMarkerColor)
+                }
             }
         }
     }
@@ -325,13 +409,16 @@ class MainActivity : AppCompatActivity() {
         fun clearMarkers() {
             markers.clear()
             circleAnnotationManager.deleteAll()
+            mapboxMap.removeStyleLayer("linelayer")
         }
 
-        fun showMarker(coordinate: Point) {
-            showMarkers(listOf(coordinate))
+        fun showMarker(coordinate: Point, markerColor: String, sourcePoint: Point? = null) {
+            val pointList =
+                if (sourcePoint != null) listOf(coordinate, sourcePoint) else listOf(coordinate)
+            showMarkers(pointList, markerColor)
         }
 
-        fun showMarkers(coordinates: List<Point>) {
+        fun showMarkers(coordinates: List<Point>, markerColor: String) {
             clearMarkers()
             if (coordinates.isEmpty()) {
                 onMarkersChangeListener?.invoke()
@@ -341,8 +428,12 @@ class MainActivity : AppCompatActivity() {
             coordinates.forEach { coordinate ->
                 val circleAnnotationOptions: CircleAnnotationOptions =
                     CircleAnnotationOptions().withPoint(coordinate).withCircleRadius(8.0)
-                        .withCircleColor("#ee4e8b").withCircleStrokeWidth(2.0)
+                        .withCircleColor(markerColor).withCircleStrokeWidth(2.0)
                         .withCircleStrokeColor("#ffffff")
+
+                /*CircleAnnotationOptions().withPoint(coordinate).withCircleRadius(8.0)
+                        .withCircleColor("#ee4e8b").withCircleStrokeWidth(2.0)
+                        .withCircleStrokeColor("#ffffff")*/
 
                 val annotation = circleAnnotationManager.create(circleAnnotationOptions)
                 markers[annotation.id] = coordinate
@@ -376,5 +467,32 @@ class MainActivity : AppCompatActivity() {
         )
 
         const val PERMISSIONS_REQUEST_LOCATION = 0
+
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        when (requestCode) {
+            PERMISSIONS_REQUEST_LOCATION -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    startLocationUpdate()
+                }
+            }
+        }
+    }
+
+    fun startLocationUpdate() {
+        LocationHelper().startListeningUserLocation(
+            this, object : MyLocationListener {
+                override fun onLocationChanged(location: Location?) {
+                    Log.e("LocationHelper", " location $location")
+                    sourceLocation = location
+                }
+            })
     }
 }

@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
+    alias(libs.plugins.jetbrainsKotlinKsp)
+    alias(libs.plugins.hiltPlugin)
 }
 
 android {
@@ -51,4 +53,13 @@ dependencies {
 
     implementation(libs.mapbox.map)
     implementation(libs.mapbox.search.ui)
+    implementation(libs.mapbox.navigation)
+    implementation(libs.mapbox.geojson)
+
+    //Hilt
+    implementation (libs.hilt.android)
+    ksp(libs.dagger.compiler)
+    ksp(libs.hilt.compiler)
+
+    implementation(libs.retrofit)
 }
